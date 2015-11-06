@@ -552,6 +552,6 @@ public final class CaptureActivity extends Activity implements
 	
 	public void showText(){
 		handler.post(runToast);
-		this.finish();
+		CaptureActivity.this.finish();
 	}
 }
