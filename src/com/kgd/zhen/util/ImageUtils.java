@@ -756,4 +756,32 @@ public class ImageUtils {
         } else
             return null;
     }
+    
+    /**
+     * 根据原图尺寸和目标区域的尺寸计算出合适的Bitmap尺寸
+     * @param options
+     * @param reqWidth
+     * @param reqHeight
+     * @return
+     */
+    public static int calculateInSampleSize(
+            BitmapFactory.Options options, int reqWidth, int reqHeight) {
+	    // 原始图片的宽高
+	    final int height = options.outHeight;
+	    final int width = options.outWidth;
+	    int inSampleSize = 1;
+	 
+	    if (height > reqHeight || width > reqWidth) {
+	 
+	        final int halfHeight = height / 2;
+	        final int halfWidth = width / 2;
+	 
+	        // 在保证解析出的bitmap宽高分别大于目标尺寸宽高的前提下，取可能的inSampleSize的最大值
+	        while ((halfHeight / inSampleSize) > reqHeight
+	                && (halfWidth / inSampleSize) > reqWidth) {
+	            inSampleSize *= 2;
+	        }
+	    }
+	    return inSampleSize;
+    }
 }

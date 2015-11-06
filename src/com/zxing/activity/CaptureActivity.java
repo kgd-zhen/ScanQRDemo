@@ -17,10 +17,10 @@ package com.zxing.activity;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
@@ -60,11 +60,11 @@ import com.google.zxing.qrcode.QRCodeReader;
 import com.kgd.zhen.scanqrdemo.R;
 import com.kgd.zhen.util.ImageUtils;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
 import java.util.Hashtable;
 
 
@@ -88,14 +88,11 @@ public final class CaptureActivity extends Activity implements
     private BeepManager beepManager;
 
     private SurfaceView scanPreview = null;
-    private RelativeLayout scanContainer;
-    private RelativeLayout scanCropView;
-    private ImageView scanLine;
-    private ImageView mFlash;
+    private RelativeLayout scanContainer, scanCropView;
+    private ImageView scanLine, mFlash;
     private Rect mCropRect = null;
-    public Context mContext;
     public String scanText = "";
-    public String photo_path = "";
+    private boolean flag;
     
     public Handler getHandler() {
     	return handler;
@@ -110,7 +107,6 @@ public final class CaptureActivity extends Activity implements
     @Override
     public void onCreate(Bundle icicle) {
 		super.onCreate(icicle);
-		this.mContext = this;
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		Window window = getWindow();
 		window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -265,7 +261,7 @@ public final class CaptureActivity extends Activity implements
     	System.out.println("======handleOtherText:"+text);
         // 判断是否符合基本的json格式
         if (!text.matches("^\\{.*")) {
-            showCopyTextOption(text);
+            System.out.println("text="+text);
         } else {
 //            try {
 //                BarCode barcode = BarCode.parse(text);
@@ -281,12 +277,6 @@ public final class CaptureActivity extends Activity implements
 //                showCopyTextOption(text);
 //            }
         }
-    }
-
-
-
-    private void showCopyTextOption(final String text) {
-    	System.out.println("-------showCopyTextOption---------");
     }
 
     private void initCamera(SurfaceHolder surfaceHolder) {
@@ -402,29 +392,23 @@ public final class CaptureActivity extends Activity implements
 
     @Override
     public void onClick(View v) {
-		// TODO Auto-generated method stub
 		switch (v.getId()) {
 			case R.id.capture_flash:
 			    light();
 			    break;
-		
 			default:
 			    break;
 		}
     }
     
-    private boolean flag;
-    
     protected void light() {
         if (flag == true) {
             flag = false;
-            // 开闪光灯
-            cameraManager.openLight();
+            cameraManager.openLight(); // 开闪光灯
             mFlash.setBackgroundResource(R.drawable.barcode_torch_on);
         } else {
             flag = true;
-            // 关闪光灯
-            cameraManager.offLight();
+            cameraManager.offLight(); // 关闪光灯
             mFlash.setBackgroundResource(R.drawable.barcode_torch_off);
         }
     }
@@ -464,44 +448,35 @@ public final class CaptureActivity extends Activity implements
             @Override
             public void run() {
                 Bitmap bitmap = null;
-                String path = "";
                 if (requestCode == ImageUtils.REQUEST_CODE_GETIMAGE_BYSDCARD) {
                     if (data == null)
                         return;
                     Uri selectedImageUri = data.getData();
                     if (selectedImageUri != null) {
-                        	selectedImagePath = ImageUtils.getImagePath(selectedImageUri, CaptureActivity.this);
-                        	path = selectedImagePath;
-                        	bitmap = ImageUtils.getBitmapByPath(path);
-                        	if(bitmap ==null){
-                                bitmap = ImageUtils.getBitmapByPath(path, null);
-                        	}
-                        	if(bitmap ==null){
-                                bitmap = ImageUtils.loadPicasaImageFromGalley(
-                                        selectedImageUri, CaptureActivity.this);
-                        	}
-                    } else {
-                        bitmap = ImageUtils.loadPicasaImageFromGalley(
-                                selectedImageUri, CaptureActivity.this);
+                    	selectedImagePath = ImageUtils.getImagePath(selectedImageUri, CaptureActivity.this);
+                    	BitmapFactory.Options opts = new BitmapFactory.Options();
+                    	opts.inJustDecodeBounds = true;
+                    	bitmap = ImageUtils.getBitmapByPath(selectedImagePath, opts);
+                    	int samplesize = ImageUtils.calculateInSampleSize(opts, 600, 600); //将图片缩小到600左右
+                    	opts.inJustDecodeBounds = false;
+                    	opts.inSampleSize = samplesize;
+                    	bitmap = ImageUtils.getBitmapByPath(selectedImagePath, opts);
+                    	if(bitmap ==null){
+                            bitmap = ImageUtils.loadPicasaImageFromGalley(
+                                    selectedImageUri, CaptureActivity.this);
+                    	}
                     }
                     
-                	Result result = scanningImage(bitmap);  
-                	// String result = decode(photo_path);  
+                	Result result = scanningImage(bitmap);
+                	recycleBitmap(bitmap);
                 	if (result == null) {  
-                         Looper.prepare();  
-                         Toast.makeText(getApplicationContext(), "图片格式有误", 0)  
-                                 .show();  
-                         Looper.loop();  
-                     } else {  
-                         Log.i("123result", result.toString());  
-                         // Log.i("123result", result.getText());  
-                         // 数据返回  
-                         String recode = recode(result.toString());
-                         System.out.println("recode="+recode);
-                         scanText = recode;
-//                         handler.post(runToast);
+                         Looper.prepare();
+                         Toast.makeText(getApplicationContext(), "图片格式有误", 0).show();  
+                         Looper.loop();
+                     } else {// 数据返回    
+                    	 scanText = recode(result.toString());
+                         showText();
                      }  
-                    
                 }
             };
         }.start();
@@ -525,7 +500,9 @@ public final class CaptureActivity extends Activity implements
         BinaryBitmap bitmap1 = new BinaryBitmap(new HybridBinarizer(source));  
         QRCodeReader reader = new QRCodeReader();  
         try {  
-            return reader.decode(bitmap1, hints);  
+        	Result result = reader.decode(bitmap1, hints);
+        	recycleBitmap(bitmap);
+        	return result;
         } catch (NotFoundException e) {  
             e.printStackTrace();  
         } catch (ChecksumException e) {  
@@ -538,7 +515,6 @@ public final class CaptureActivity extends Activity implements
 	
 	private String recode(String str) {  
         String formart = "";  
-  
         try {  
             boolean ISO = Charset.forName("ISO-8859-1").newEncoder()  
                     .canEncode(str);  
@@ -552,9 +528,20 @@ public final class CaptureActivity extends Activity implements
         } catch (UnsupportedEncodingException e) {  
             // TODO Auto-generated catch block  
             e.printStackTrace();  
-        }  
+        } catch (IllegalCharsetNameException e) {
+        	e.printStackTrace();
+        }
         return formart;  
     }  
+	//
+	public void recycleBitmap(Bitmap bitmap)
+	{
+	    if(null!=bitmap&&!bitmap.isRecycled())
+	    {
+	    	bitmap.recycle();
+	    }
+	    bitmap=null;
+	}
 	
 	Runnable runToast = new Runnable() {
 		@Override
@@ -562,4 +549,9 @@ public final class CaptureActivity extends Activity implements
 			Toast.makeText(getApplicationContext(), scanText, Toast.LENGTH_LONG).show();
 		}
 	};
+	
+	public void showText(){
+		handler.post(runToast);
+		this.finish();
+	}
 }
