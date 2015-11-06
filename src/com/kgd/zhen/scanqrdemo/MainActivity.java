@@ -7,6 +7,7 @@ import com.zxing.activity.CaptureActivity;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.view.Menu;
@@ -76,6 +77,32 @@ public class MainActivity extends Activity {
                         @Override
                         public void run() {
                             img_qr.setImageBitmap(BitmapFactory.decodeFile(filePath));
+                        }
+                    });
+                }
+            }
+        }).start();
+	}
+	
+	public void GenerateBar(View v){
+		if(et_qr.getText().toString().equals("")){
+			Toast.makeText(getApplicationContext(), "et_qr 不能为空！", Toast.LENGTH_LONG);
+			return;
+		}
+		//二维码图片较大时，生成图片、保存文件的时间可能较长，因此放在新线程中
+        new Thread(new Runnable() {
+        	Bitmap bitmap = null;
+            @Override
+            public void run() {
+            	
+            	bitmap = QRCodeUtil.creatBarcode(getApplicationContext(), et_qr.getText().toString(), 
+            			800, 300, true);
+            	
+                if (bitmap != null) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            img_qr.setImageBitmap(bitmap);
                         }
                     });
                 }
